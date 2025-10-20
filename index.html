@@ -53,16 +53,13 @@ const speakOutBtn = document.getElementById("speakOutBtn");
 const userInput = document.getElementById("userInput");
 const responseBox = document.getElementById("response");
 
-// 🔑 kendi OpenAI API anahtarını buraya koy
-const OPENAI_API_KEY = "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";
-
-// 🎤 Ses tanıma ayarları
+// 🎤 Ses tanıma
 let recognition;
 if ("webkitSpeechRecognition" in window) {
   recognition = new webkitSpeechRecognition();
   recognition.continuous = false;
   recognition.interimResults = false;
-  recognition.lang = "auto"; // Tarayıcı genelde sistem dilini alır
+  recognition.lang = "auto";
   recognition.onresult = (event) => {
     userInput.value = event.results[0][0].transcript;
   };
@@ -83,8 +80,8 @@ speakOutBtn.addEventListener("click", () => {
   window.speechSynthesis.speak(msg);
 });
 
-// 🧠 GPT fonksiyonu
-async function askGPT(prompt, menuData) {
+// 🧠 GPT via Cloudflare Worker
+async function askGPTWorker(prompt, menuData) {
   const fullPrompt = `
 You are a multilingual restaurant assistant.
 You understand any language and respond in the same language as the customer.
@@ -95,19 +92,20 @@ Customer says: "${prompt}"
 Reply kindly, and give 1-2 suitable suggestions from the menu.
 `;
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  const res = await fetch("https://mandarinopenai.furkan285saglam.workers.dev/", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + OPENAI_API_KEY,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gpt-4o-mini",
-      messages: [{ role: "user", content: fullPrompt }],
-    }),
+      messages: [
+        { role: "system", content: "You are a helpful and friendly restaurant assistant." },
+        { role: "user", content: fullPrompt }
+      ]
+    })
   });
+
   const data = await res.json();
-  return data.choices[0].message.content.trim();
+  return data.choices?.[0]?.message?.content?.trim() || "No response";
 }
 
 // 🧾 GPT çağrısı
@@ -119,7 +117,7 @@ askBtn.addEventListener("click", async () => {
   try {
     const menuRes = await fetch("menu.json");
     const menuData = await menuRes.json();
-    const reply = await askGPT(text, menuData);
+    const reply = await askGPTWorker(text, menuData);
     responseBox.value = reply;
   } catch (err) {
     responseBox.value = "Error: " + err.message;
@@ -128,4 +126,3 @@ askBtn.addEventListener("click", async () => {
 </script>
 </body>
 </html>
-
