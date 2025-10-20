@@ -1,0 +1,6 @@
+[
+  { "name": "Mango Smoothie", "tags": ["drink", "sweet"], "price": 220, "description": "Fresh mango blended with ice and milk." },
+  { "name": "Coke Zero", "tags": ["drink", "cold"], "price": 150, "description": "Chilled soft drink, sugar-free." },
+  { "name": "Beef Dumplings", "tags": ["beef", "steamed"], "price": 350, "description": "Traditional dumplings with seasoned beef." },
+  { "name": "Vegan Noodle Bowl", "tags": ["vegan", "no spicy"], "price": 390, "description": "Rice noodles with tofu and vegetables." }
+]
