@@ -5,34 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AI Restaurant Assistant</title>
 <style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #fafafa;
-    text-align: center;
-    padding: 20px;
-  }
-  textarea {
-    width: 90%;
-    height: 100px;
-    font-size: 16px;
-    margin-top: 10px;
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-  }
-  button {
-    background-color: #0078d7;
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 16px;
-    margin: 8px;
-    cursor: pointer;
-  }
-  button:hover {
-    background-color: #005fa3;
-  }
+  body { font-family: Arial, sans-serif; background: #fafafa; text-align: center; padding: 20px; }
+  textarea { width: 90%; height: 100px; font-size: 16px; margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
+  button { background-color: #0078d7; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; margin: 8px; cursor: pointer; }
+  button:hover { background-color: #005fa3; }
 </style>
 </head>
 <body>
@@ -60,18 +36,11 @@ if ("webkitSpeechRecognition" in window) {
   recognition.continuous = false;
   recognition.interimResults = false;
   recognition.lang = "auto";
-  recognition.onresult = (event) => {
-    userInput.value = event.results[0][0].transcript;
-  };
+  recognition.onresult = (event) => { userInput.value = event.results[0][0].transcript; };
   recognition.onerror = () => alert("Voice recognition error");
-} else {
-  micBtn.disabled = true;
-  micBtn.textContent = "🎤 Not supported";
-}
+} else { micBtn.disabled = true; micBtn.textContent = "🎤 Not supported"; }
 
-micBtn.addEventListener("click", () => {
-  if (recognition) recognition.start();
-});
+micBtn.addEventListener("click", () => { if (recognition) recognition.start(); });
 
 // 🔊 Cevabı sesli okuma
 speakOutBtn.addEventListener("click", () => {
@@ -80,8 +49,8 @@ speakOutBtn.addEventListener("click", () => {
   window.speechSynthesis.speak(msg);
 });
 
-// 🧠 GPT via Cloudflare Worker
-async function askGPTWorker(prompt, menuData) {
+// 🧠 Mistral-7B via Hugging Face Space
+async function askMistralSpace(prompt, menuData) {
   const fullPrompt = `
 You are a multilingual restaurant assistant.
 You understand any language and respond in the same language as the customer.
@@ -92,20 +61,19 @@ Customer says: "${prompt}"
 Reply kindly, and give 1-2 suitable suggestions from the menu.
 `;
 
-  const res = await fetch("https://mandarinopenai.furkan285saglam.workers.dev/", {
+  const res = await fetch("https://Fsag-Mandarin.hf.space/run/predict", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You are a helpful and friendly restaurant assistant." },
-        { role: "user", content: fullPrompt }
-      ]
-    })
+    headers: {
+      "Content-Type": "application/json",
+      // Eğer Space private ise token ekleyin:
+      // "Authorization": "Bearer <HF_TOKEN>"
+    },
+    body: JSON.stringify({ data: [fullPrompt] })
   });
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content?.trim() || "No response";
+  // Gradio Space cevabı: data.data[0]
+  return data.data?.[0] || "No response";
 }
 
 // 🧾 GPT çağrısı
@@ -117,7 +85,7 @@ askBtn.addEventListener("click", async () => {
   try {
     const menuRes = await fetch("menu.json");
     const menuData = await menuRes.json();
-    const reply = await askGPTWorker(text, menuData);
+    const reply = await askMistralSpace(text, menuData);
     responseBox.value = reply;
   } catch (err) {
     responseBox.value = "Error: " + err.message;
