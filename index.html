@@ -30,9 +30,9 @@
 
   .button-container {
     display: flex;
-    flex-wrap: wrap; /* Ekran daraldığında alt satıra geçer */
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 10px; /* Butonlar arası boşluk */
+    gap: 10px;
     margin: 10px 0;
   }
 
@@ -44,7 +44,7 @@
     border-radius: 8px;
     font-size: 16px;
     cursor: pointer;
-    flex: 1 1 150px; /* Butonlar esnek, minimum 150px */
+    flex: 1 1 150px;
     max-width: 200px;
   }
 
@@ -54,7 +54,7 @@
 
   @media (max-width: 500px) {
     button {
-      flex: 1 1 100%; /* Mobilde tam genişlik */
+      flex: 1 1 100%;
       max-width: none;
     }
   }
@@ -78,7 +78,100 @@
 <textarea id="response" placeholder="Assistant reply..." readonly></textarea>
 
 <script>
-// Kodunuz buraya gelecek: recognition, askGPTWorker, askBtn, translateBtn eventleri
+const micBtn = document.getElementById("micBtn");
+const askBtn = document.getElementById("askBtn");
+const translateBtn = document.getElementById("translateBtn");
+const userInput = document.getElementById("userInput");
+const responseBox = document.getElementById("response");
+
+// 🎤 Ses tanıma
+let recognition;
+if ("webkitSpeechRecognition" in window) {
+  recognition = new webkitSpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = "auto";
+  recognition.onresult = (event) => {
+    userInput.value = event.results[0][0].transcript;
+  };
+  recognition.onerror = () => alert("Voice recognition error");
+} else {
+  micBtn.disabled = true;
+  micBtn.textContent = "🎤 Not supported";
+}
+
+micBtn.addEventListener("click", () => {
+  if (recognition) recognition.start();
+});
+
+// 🧠 GPT Worker
+async function askGPTWorker(prompt, menuData, mode="menu") {
+  let fullPrompt = "";
+
+  if(mode === "menu") {
+    fullPrompt = `
+You are a multilingual restaurant assistant.
+You understand any language and respond in the same language as the customer.
+If the customer asks for a category (like drinks, vegan, spicy, etc.), use that filter on the menu.
+Menu data:
+${JSON.stringify(menuData, null, 2)}
+Customer says: "${prompt}"
+Reply kindly, and give 1–2 suitable suggestions from the menu.
+`;
+  } else if(mode === "translate") {
+    fullPrompt = `
+You are a translator.
+Translate the following text into English (or target language if specified):
+"${prompt}"
+Only output the translated text.
+`;
+  }
+
+  const res = await fetch("https://mandarinopenai.furkan285saglam.workers.dev/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: mode === "menu" ? "You are a helpful restaurant assistant." : "You are a translator." },
+        { role: "user", content: fullPrompt }
+      ]
+    })
+  });
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content?.trim() || "No response.";
+}
+
+// 🧾 Ask butonu
+askBtn.addEventListener("click", async () => {
+  const text = userInput.value.trim();
+  if (!text) return;
+  responseBox.value = "Thinking...";
+
+  try {
+    const menuRes = await fetch("menu.json");
+    const menuData = await menuRes.json();
+    const reply = await askGPTWorker(text, menuData, "menu");
+    responseBox.value = reply;
+  } catch (err) {
+    responseBox.value = "Error: " + err.message;
+  }
+});
+
+// 🧾 Translate butonu
+translateBtn.addEventListener("click", async () => {
+  const text = userInput.value.trim();
+  if (!text) return;
+  responseBox.value = "Translating...";
+
+  try {
+    const reply = await askGPTWorker(text, [], "translate");
+    responseBox.value = reply;
+  } catch (err) {
+    responseBox.value = "Error: " + err.message;
+  }
+});
 </script>
 </body>
 </html>
