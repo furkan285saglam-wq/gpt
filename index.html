@@ -84,24 +84,48 @@ const translateBtn = document.getElementById("translateBtn");
 const userInput = document.getElementById("userInput");
 const responseBox = document.getElementById("response");
 
-// 🎤 Ses tanıma
+// 🎤 Ses tanıma (auto dil)
 let recognition;
 if ("webkitSpeechRecognition" in window) {
   recognition = new webkitSpeechRecognition();
   recognition.continuous = false;
   recognition.interimResults = false;
-  recognition.lang = "auto";
+  try {
+    recognition.lang = "auto"; // Auto dil
+  } catch(err) {
+    recognition.lang = "en-US"; // fallback
+    console.warn("Auto language not supported, fallback to en-US");
+  }
+
   recognition.onresult = (event) => {
     userInput.value = event.results[0][0].transcript;
   };
-  recognition.onerror = () => alert("Voice recognition error");
+
+  recognition.onerror = (event) => {
+    console.error("Speech recognition error:", event.error);
+    if(event.error === "no-speech" || event.error === "audio-capture") {
+      alert("Lütfen mikrofonu kontrol edin ve tekrar deneyin.");
+    } else if(event.error === "not-allowed") {
+      alert("Mikrofona izin verilmedi. Tarayıcı izinlerini kontrol edin.");
+    } else {
+      alert("Voice recognition error: " + event.error);
+    }
+  };
+
+  recognition.onend = () => {
+    console.log("Voice recognition ended.");
+  };
 } else {
   micBtn.disabled = true;
   micBtn.textContent = "🎤 Not supported";
 }
 
 micBtn.addEventListener("click", () => {
-  if (recognition) recognition.start();
+  try {
+    recognition.start();
+  } catch(err) {
+    console.error("Could not start recognition:", err);
+  }
 });
 
 // 🧠 GPT Worker
