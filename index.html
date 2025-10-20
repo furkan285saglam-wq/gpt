@@ -1,1 +1,63 @@
-<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8" /> <meta name="viewport" content="width=device-width, initial-scale=1.0" /> <title>AI Restaurant Assistant</title> <style> body { font-family: Arial, sans-serif; background: #fafafa; text-align: center; padding: 20px; } textarea { width: 90%; height: 100px; font-size: 16px; margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; } button { background-color: #0078d7; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; margin: 8px; cursor: pointer; } button:hover { background-color: #005fa3; } </style> </head> <body> <h2>🍽️ Voice-Enabled Restaurant Assistant</h2> <p>Speak or type in any language</p> <button id="micBtn">🎤 Speak</button> <textarea id="userInput" placeholder="Ask or say something..."></textarea> <button id="askBtn">Ask</button> <button id="speakOutBtn">🔊 Read Reply</button> <textarea id="response" placeholder="Assistant reply..." readonly></textarea> <script> const micBtn = document.getElementById("micBtn"); const askBtn = document.getElementById("askBtn"); const speakOutBtn = document.getElementById("speakOutBtn"); const userInput = document.getElementById("userInput"); const responseBox = document.getElementById("response"); // 🎤 Ses tanıma let recognition; if ("webkitSpeechRecognition" in window) { recognition = new webkitSpeechRecognition(); recognition.continuous = false; recognition.interimResults = false; recognition.lang = "auto"; recognition.onresult = (event) => { userInput.value = event.results[0][0].transcript; }; recognition.onerror = () => alert("Voice recognition error"); } else { micBtn.disabled = true; micBtn.textContent = "🎤 Not supported"; } micBtn.addEventListener("click", () => { if (recognition) recognition.start(); }); // 🔊 Cevabı sesli okuma speakOutBtn.addEventListener("click", () => { const msg = new SpeechSynthesisUtterance(responseBox.value); msg.lang = "auto"; window.speechSynthesis.speak(msg); }); // 🧠 GPT via Cloudflare Worker async function askGPTWorker(prompt, menuData) { const fullPrompt = You are a multilingual restaurant assistant. You understand any language and respond in the same language as the customer. If the customer asks for a category (like drinks, vegan, spicy, etc.), use that filter on the menu. Menu data: ${JSON.stringify(menuData)} Customer says: "${prompt}" Reply kindly, and give 1-2 suitable suggestions from the menu. ; const res = await fetch("https://mandarinopenai.furkan285saglam.workers.dev/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [ { role: "system", content: "You are a helpful and friendly restaurant assistant." }, { role: "user", content: fullPrompt } ] }) }); const data = await res.json(); return data.choices?.[0]?.message?.content?.trim() || "No response"; } // 🧾 GPT çağrısı askBtn.addEventListener("click", async () => { const text = userInput.value.trim(); if (!text) return; responseBox.value = "Thinking..."; try { const menuRes = await fetch("menu.json"); const menuData = await menuRes.json(); const reply = await askGPTWorker(text, menuData); responseBox.value = reply; } catch (err) { responseBox.value = "Error: " + err.message; } }); </script> </body> </html>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Restoran Asistanı 🍽️</title>
+  <style>
+    body { font-family: sans-serif; background: #f7f7f7; margin: 0; padding: 20px; }
+    #chat { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; }
+    .msg { margin: 10px 0; padding: 10px; border-radius: 8px; }
+    .user { background: #dbeafe; text-align: right; }
+    .bot { background: #f3f4f6; text-align: left; }
+    input { width: 80%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
+    button { padding: 10px 14px; border: none; border-radius: 8px; background: #2563eb; color: white; }
+  </style>
+</head>
+<body>
+  <div id="chat">
+    <h2>Restoran Asistanı 🍽️</h2>
+    <div id="messages"></div>
+    <div>
+      <input id="input" placeholder="Bir şey yazın..." />
+      <button id="send">Gönder</button>
+    </div>
+  </div>
+
+  <script>
+    const apiUrl = "https://restaurant-chatbot.furkan.workers.dev"; // Worker URL'ini buraya koy
+
+    const messagesDiv = document.getElementById("messages");
+    const input = document.getElementById("input");
+    const send = document.getElementById("send");
+
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+      addMessage(text, "user");
+      input.value = "";
+
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, language: navigator.language }),
+      });
+      const data = await res.json();
+      addMessage(data.reply, "bot");
+    }
+
+    function addMessage(text, role) {
+      const div = document.createElement("div");
+      div.className = "msg " + role;
+      div.textContent = text;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    send.onclick = sendMessage;
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
+</body>
+</html>
