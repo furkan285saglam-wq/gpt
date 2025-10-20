@@ -44,13 +44,16 @@
 
 <button id="micBtn">🎤 Speak</button>
 <textarea id="userInput" placeholder="Ask or say something..."></textarea>
+<br>
 <button id="askBtn">Ask</button>
+<button id="translateBtn">Translate</button>
 
 <textarea id="response" placeholder="Assistant reply..." readonly></textarea>
 
 <script>
 const micBtn = document.getElementById("micBtn");
 const askBtn = document.getElementById("askBtn");
+const translateBtn = document.getElementById("translateBtn");
 const userInput = document.getElementById("userInput");
 const responseBox = document.getElementById("response");
 
@@ -74,9 +77,12 @@ micBtn.addEventListener("click", () => {
   if (recognition) recognition.start();
 });
 
-// 🧠 GPT (Cloudflare Worker)
-async function askGPTWorker(prompt, menuData) {
-  const fullPrompt = `
+// 🧠 GPT Worker
+async function askGPTWorker(prompt, menuData, mode="menu") {
+  let fullPrompt = "";
+
+  if(mode === "menu") {
+    fullPrompt = `
 You are a multilingual restaurant assistant.
 You understand any language and respond in the same language as the customer.
 If the customer asks for a category (like drinks, vegan, spicy, etc.), use that filter on the menu.
@@ -85,6 +91,14 @@ ${JSON.stringify(menuData, null, 2)}
 Customer says: "${prompt}"
 Reply kindly, and give 1–2 suitable suggestions from the menu.
 `;
+  } else if(mode === "translate") {
+    fullPrompt = `
+You are a translator.
+Translate the following text into English (or target language if specified):
+"${prompt}"
+Only output the translated text.
+`;
+  }
 
   const res = await fetch("https://mandarinopenai.furkan285saglam.workers.dev/", {
     method: "POST",
@@ -92,7 +106,7 @@ Reply kindly, and give 1–2 suitable suggestions from the menu.
     body: JSON.stringify({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "You are a helpful and friendly restaurant assistant." },
+        { role: "system", content: mode === "menu" ? "You are a helpful restaurant assistant." : "You are a translator." },
         { role: "user", content: fullPrompt }
       ]
     })
@@ -102,7 +116,7 @@ Reply kindly, and give 1–2 suitable suggestions from the menu.
   return data.choices?.[0]?.message?.content?.trim() || "No response.";
 }
 
-// 🧾 GPT çağrısı
+// 🧾 Ask butonu
 askBtn.addEventListener("click", async () => {
   const text = userInput.value.trim();
   if (!text) return;
@@ -111,7 +125,21 @@ askBtn.addEventListener("click", async () => {
   try {
     const menuRes = await fetch("menu.json");
     const menuData = await menuRes.json();
-    const reply = await askGPTWorker(text, menuData);
+    const reply = await askGPTWorker(text, menuData, "menu");
+    responseBox.value = reply;
+  } catch (err) {
+    responseBox.value = "Error: " + err.message;
+  }
+});
+
+// 🧾 Translate butonu
+translateBtn.addEventListener("click", async () => {
+  const text = userInput.value.trim();
+  if (!text) return;
+  responseBox.value = "Translating...";
+
+  try {
+    const reply = await askGPTWorker(text, [], "translate");  // menü verisi boş
     responseBox.value = reply;
   } catch (err) {
     responseBox.value = "Error: " + err.message;
