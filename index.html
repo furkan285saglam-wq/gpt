@@ -1,3 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bosphorus Lounge Restaurant Assistant</title>
+<style>
+body { font-family: Arial, sans-serif; background:#fafafa; padding:20px; text-align:center; }
+h2 { margin-bottom:6px; }
+p.sub { margin-top:0; color:#555; }
+textarea { width:90%; max-width:600px; height:100px; font-size:16px; margin:10px auto; padding:10px; border-radius:8px; border:1px solid #ccc; resize:vertical; display:block; }
+.button-container { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin:10px 0; }
+button { background:#0078d7; color:#fff; border:none; padding:12px 20px; border-radius:8px; font-size:16px; cursor:pointer; flex:1 1 150px; max-width:200px; transition:background .15s; }
+button:hover { background:#005fa3; }
+button:disabled { background:#999; cursor:not-allowed; }
+@media (max-width:500px) { button { flex:1 1 100%; max-width:none; } textarea { height:120px; } }
+.small { font-size:13px; color:#666; margin-top:6px; }
+</style>
+</head>
+<body>
+<h2>🍽️ Bosphorus Lounge AI Restaurant Assistant</h2>
+<p class="sub">Click 🎤 to speak — stops automatically when silent</p>
+<p class="sub">Speak or type in any language</p>
+
+<div class="button-container">
+  <button id="micBtn">🎤 Speak</button>
+</div>
+
+<textarea id="userInput" placeholder="Ask or say something..."></textarea>
+
+<div class="button-container">
+  <button id="askBtn">Ask</button>
+  <button id="translateBtn">Translate</button>
+</div>
+
+<textarea id="response" placeholder="Assistant reply..." readonly></textarea>
+<p class="small" id="debug"></p>
+
 <script>
 const micBtn = document.getElementById('micBtn');
 const askBtn = document.getElementById('askBtn');
@@ -9,12 +47,12 @@ const debugEl = document.getElementById('debug');
 let mediaRecorder, audioChunks = [], silenceTimer;
 let stream, audioContext, analyser, dataArray;
 
-// Safari & iOS detection
+// Detect Safari/iPhone
 const ua = navigator.userAgent || '';
 const isIOS = /iPad|iPhone|iPod/.test(ua);
 const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
 
-/* ---------- Push-to-talk functions ---------- */
+/* ---------- Start Recording ---------- */
 async function startRecording() {
   debugEl.textContent = '';
   if (isIOS && isSafari && !window.MediaRecorder) {
@@ -44,7 +82,6 @@ async function startRecording() {
       micBtn.disabled = false;
     };
 
-    // Başlat
     mediaRecorder.start();
     micBtn.textContent = '🎙️ Listening...';
     micBtn.disabled = true;
@@ -57,9 +94,7 @@ async function startRecording() {
     source.connect(analyser);
     analyser.fftSize = 512;
     dataArray = new Uint8Array(analyser.frequencyBinCount);
-
     detectSilence();
-
   } catch (err) {
     console.error(err);
     alert('Microphone error: ' + err.message);
@@ -68,6 +103,7 @@ async function startRecording() {
   }
 }
 
+/* ---------- Silence Detection ---------- */
 function detectSilence() {
   analyser.getByteFrequencyData(dataArray);
   const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
@@ -79,7 +115,7 @@ function detectSilence() {
         if (mediaRecorder && mediaRecorder.state === 'recording') {
           mediaRecorder.stop();
         }
-      }, 1000); // 1 saniye sessizlik
+      }, 1000);
     }
   } else {
     if (silenceTimer) {
@@ -93,7 +129,7 @@ function detectSilence() {
   }
 }
 
-/* ---------- SpeechRecognition fallback (iPhone Safari) ---------- */
+/* ---------- iPhone Safari Fallback ---------- */
 function useSpeechRecognitionFallback() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
@@ -104,7 +140,7 @@ function useSpeechRecognitionFallback() {
   const recognition = new SpeechRecognition();
   recognition.continuous = false;
   recognition.interimResults = false;
-  recognition.lang = 'en-US'; // dil istersen otomatik algılatılabilir
+  recognition.lang = 'en-US'; // dil ayarı
 
   recognition.onstart = () => {
     micBtn.textContent = '🎙️ Listening...';
@@ -130,7 +166,7 @@ function useSpeechRecognitionFallback() {
   recognition.start();
 }
 
-/* ---------- Send to worker ---------- */
+/* ---------- Send Audio to Worker ---------- */
 async function sendAudioToServer(audioBlob) {
   const formData = new FormData();
   formData.append('file', audioBlob, 'recording.webm');
@@ -152,10 +188,9 @@ async function sendAudioToServer(audioBlob) {
   }
 }
 
-/* ---------- Event listeners ---------- */
+/* ---------- Mic Button ---------- */
 micBtn.addEventListener('click', async () => {
   if (micBtn.textContent.includes('🎙️')) {
-    // stop recording manually if needed
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
       debugEl.textContent = 'Stopped manually';
@@ -165,7 +200,7 @@ micBtn.addEventListener('click', async () => {
   }
 });
 
-/* ---------- GPT Worker ---------- aa*/
+/* ---------- GPT Worker ---------- */
 async function askGPTWorker(prompt, mode = 'menu') {
   try {
     const res = await fetch('https://mandarinopenai.furkan285saglam.workers.dev/', {
@@ -181,7 +216,7 @@ async function askGPTWorker(prompt, mode = 'menu') {
   }
 }
 
-/* ---------- Ask / Translate ---------- */
+/* ---------- Ask / Translate Buttons ---------- */
 askBtn.addEventListener('click', async () => {
   const text = userInput.value.trim();
   if (!text) return;
@@ -198,3 +233,5 @@ translateBtn.addEventListener('click', async () => {
   responseBox.value = reply;
 });
 </script>
+</body>
+</html>
