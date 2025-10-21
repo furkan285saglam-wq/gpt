@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bosphorus Lounge Restaurant Assistant</title>
+<title>AI Restaurant Assistant - Push-to-Talk</title>
 <style>
 body { font-family: Arial, sans-serif; background:#fafafa; padding:20px; text-align:center; }
 h2 { margin-bottom:6px; }
@@ -18,8 +18,8 @@ button:disabled { background:#999; cursor:not-allowed; }
 </style>
 </head>
 <body>
-<h2>🍽️ Bosphorus Lounge AI Restaurant Assistant</h2>
-<p class="sub">Speak or type in any language</p>
+<h2>🍽️ AI Restaurant Assistant</h2>
+<p class="sub">Press & hold 🎤 to speak — release to send</p>
 
 <div class="button-container">
   <button id="micBtn">🎤 Speak</button>
@@ -43,101 +43,75 @@ const userInput = document.getElementById('userInput');
 const responseBox = document.getElementById('response');
 const debugEl = document.getElementById('debug');
 
-/* ---------- Record audio with auto stop on silence ---------- */
-micBtn.addEventListener('click', async () => {
-  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    alert('Tarayıcı mikrofon erişimini desteklemiyor.');
-    return;
-  }
+let mediaRecorder, audioChunks, stream;
 
+/* ---------- Push-to-talk functions ---------- */
+const startRecording = async () => {
   micBtn.disabled = true;
-  micBtn.textContent = '🎙️ Listening...';
-  debugEl.textContent = 'Listening...';
-
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
-    const audioChunks = [];
-    const mediaRecorder = new MediaRecorder(stream);
+  micBtn.textContent = '🎙️ Recording...';
+  debugEl.textContent = 'Recording...';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.ondataavailable = e => { if(e.data.size>0) audioChunks.push(e.data); };
     mediaRecorder.start();
-
-    /* ---------- Silence Detection ---------- */
-    const audioContext = new AudioContext();
-    const source = audioContext.createMediaStreamSource(stream);
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 512;
-    source.connect(analyser);
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-    let silenceStart = null;
-    const checkSilence = () => {
-      analyser.getByteFrequencyData(dataArray);
-      const avg = dataArray.reduce((a,b)=>a+b,0)/dataArray.length;
-      if(avg < 5){ 
-        if(!silenceStart) silenceStart = Date.now();
-        else if(Date.now() - silenceStart > 800){
-          mediaRecorder.stop();
-          audioContext.close();
-          return;
-        }
-      }else{
-        silenceStart = null;
-      }
-      requestAnimationFrame(checkSilence);
-    };
-    checkSilence();
-
-    mediaRecorder.onstop = async () => {
-      stream.getTracks().forEach(track=>track.stop());
-      const audioBlob = new Blob(audioChunks,{ type:'audio/webm' });
-
-      debugEl.textContent = 'Sending audio to server...';
-      const formData = new FormData();
-      formData.append('file', audioBlob, 'recording.webm');
-
-      try{
-        const res = await fetch('https://mandarinopenai.furkan285saglam.workers.dev/',{
-          method:'POST',
-          body: formData
-        });
-
-        const rawText = await res.text();
-        let data;
-        try{
-          data = JSON.parse(rawText);
-        }catch(e){
-          console.error('JSON parse error:', e);
-          alert('Worker JSON döndürmedi: '+rawText);
-          micBtn.disabled = false;
-          micBtn.textContent = '🎤 Speak';
-          debugEl.textContent = 'JSON parse error';
-          return;
-        }
-
-        // 🔹 Konuşulan dili koruyarak yaz
-        if(data && data.text){
-          userInput.value = data.text;
-          debugEl.textContent = 'Transcription complete';
-        }else{
-          debugEl.textContent = 'No transcription returned';
-          alert('Speech recognition failed.');
-        }
-
-      }catch(err){
-        console.error(err);
-        alert('Error sending audio: '+(err.message||err));
-      }
-
-      micBtn.disabled = false;
-      micBtn.textContent = '🎤 Speak';
-    };
-
-  }catch(err){
+  } catch(err){
     console.error(err);
     alert('Error accessing microphone: '+(err.message||err));
     micBtn.disabled = false;
     micBtn.textContent = '🎤 Speak';
   }
+};
+
+const stopRecording = async () => {
+  return new Promise(resolve => {
+    if(!mediaRecorder) return resolve(null);
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type:'audio/webm' });
+      if(stream) stream.getTracks().forEach(track => track.stop());
+      resolve(audioBlob);
+    };
+    mediaRecorder.stop();
+    micBtn.disabled = false;
+    micBtn.textContent = '🎤 Speak';
+  });
+};
+
+const sendAudioToServer = async (blob) => {
+  if(!blob) return;
+  debugEl.textContent = 'Sending audio to server...';
+  const formData = new FormData();
+  formData.append('file', blob, 'recording.webm');
+  try{
+    const res = await fetch('https://mandarinopenai.furkan285saglam.workers.dev/', {
+      method:'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if(data && data.text){
+      userInput.value = data.text;
+      debugEl.textContent = 'Transcription complete';
+    }else{
+      debugEl.textContent = 'No transcription returned';
+      alert('Speech recognition failed.');
+    }
+  }catch(err){
+    console.error(err);
+    alert('Error sending audio: '+(err.message||err));
+  }
+};
+
+/* ---------- Push-to-talk events ---------- */
+micBtn.addEventListener('mousedown', startRecording);
+micBtn.addEventListener('touchstart', startRecording);
+micBtn.addEventListener('mouseup', async () => {
+  const blob = await stopRecording();
+  await sendAudioToServer(blob);
+});
+micBtn.addEventListener('touchend', async () => {
+  const blob = await stopRecording();
+  await sendAudioToServer(blob);
 });
 
 /* ---------- GPT Worker ---------- */
@@ -212,4 +186,3 @@ translateBtn.addEventListener('click', async ()=>{
 </script>
 </body>
 </html>
-
