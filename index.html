@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Restaurant Assistant - Whisper Safe</title>
+<title>AI Restaurant Assistant - Whisper Auto Stop</title>
 <style>
 body { font-family: Arial, sans-serif; background:#fafafa; padding:20px; text-align:center; }
 h2 { margin-bottom:6px; }
@@ -19,7 +19,7 @@ button:disabled { background:#999; cursor:not-allowed; }
 </head>
 <body>
 <h2>🍽️ AI Restaurant Assistant</h2>
-<p class="sub">Speak or type in any language — Auto stop on silence, safe JSON</p>
+<p class="sub">Speak or type in any language — Auto stop on silence, preserves language</p>
 
 <div class="button-container">
   <button id="micBtn">🎤 Speak</button>
@@ -42,11 +42,6 @@ const translateBtn = document.getElementById('translateBtn');
 const userInput = document.getElementById('userInput');
 const responseBox = document.getElementById('response');
 const debugEl = document.getElementById('debug');
-
-const ua = navigator.userAgent || '';
-const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
-
 
 /* ---------- Record audio with auto stop on silence ---------- */
 micBtn.addEventListener('click', async () => {
@@ -119,6 +114,7 @@ micBtn.addEventListener('click', async () => {
           return;
         }
 
+        // 🔹 Konuşulan dili koruyarak yaz
         if(data && data.text){
           userInput.value = data.text;
           debugEl.textContent = 'Transcription complete';
@@ -216,4 +212,3 @@ translateBtn.addEventListener('click', async ()=>{
 </script>
 </body>
 </html>
-
