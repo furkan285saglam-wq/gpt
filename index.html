@@ -46,10 +46,16 @@
     cursor: pointer;
     flex: 1 1 150px;
     max-width: 200px;
+    transition: background 0.2s ease;
   }
 
   button:hover {
     background-color: #005fa3;
+  }
+
+  button:disabled {
+    background-color: #999;
+    cursor: not-allowed;
   }
 
   @media (max-width: 500px) {
@@ -84,18 +90,15 @@ const translateBtn = document.getElementById("translateBtn");
 const userInput = document.getElementById("userInput");
 const responseBox = document.getElementById("response");
 
-// 🎤 Ses tanıma (auto dil)
+// 🎤 Ses tanıma (otomatik dil)
 let recognition;
 if ("webkitSpeechRecognition" in window) {
   recognition = new webkitSpeechRecognition();
   recognition.continuous = false;
   recognition.interimResults = false;
-  try {
-    recognition.lang = "auto"; // Auto dil
-  } catch(err) {
-    recognition.lang = "en-US"; // fallback
-    console.warn("Auto language not supported, fallback to en-US");
-  }
+
+  // Tarayıcı dilini otomatik algıla
+  recognition.lang = navigator.language || "en-US";
 
   recognition.onresult = (event) => {
     userInput.value = event.results[0][0].transcript;
@@ -103,10 +106,10 @@ if ("webkitSpeechRecognition" in window) {
 
   recognition.onerror = (event) => {
     console.error("Speech recognition error:", event.error);
-    if(event.error === "no-speech" || event.error === "audio-capture") {
+    if (event.error === "no-speech" || event.error === "audio-capture") {
       alert("Lütfen mikrofonu kontrol edin ve tekrar deneyin.");
-    } else if(event.error === "not-allowed") {
-      alert("Mikrofona izin verilmedi. Tarayıcı izinlerini kontrol edin.");
+    } else if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      alert("Mikrofona izin verilmedi veya tarayıcı engelledi. Lütfen siteye mikrofon izni verin.");
     } else {
       alert("Voice recognition error: " + event.error);
     }
@@ -120,19 +123,23 @@ if ("webkitSpeechRecognition" in window) {
   micBtn.textContent = "🎤 Not supported";
 }
 
-micBtn.addEventListener("click", () => {
+micBtn.addEventListener("click", async () => {
+  if (!recognition) return;
   try {
+    // Mikrofon iznini önceden tetikle
+    await navigator.mediaDevices.getUserMedia({ audio: true });
     recognition.start();
-  } catch(err) {
-    console.error("Could not start recognition:", err);
+  } catch (err) {
+    console.error("Could not access microphone:", err);
+    alert("Mikrofona erişim sağlanamadı. Lütfen izin verdiğinizden emin olun.");
   }
 });
 
-// 🧠 GPT Worker
+// 🧠 GPT Worker Fonksiyonu
 async function askGPTWorker(prompt, menuData, mode="menu") {
   let fullPrompt = "";
 
-  if(mode === "menu") {
+  if (mode === "menu") {
     fullPrompt = `
 You are a multilingual restaurant assistant.
 You understand any language and respond in the same language as the customer.
@@ -142,7 +149,7 @@ ${JSON.stringify(menuData, null, 2)}
 Customer says: "${prompt}"
 Reply kindly, and give 1–2 suitable suggestions from the menu.
 `;
-  } else if(mode === "translate") {
+  } else if (mode === "translate") {
     fullPrompt = `
 You are a translator.
 Translate the following text into English (or target language if specified):
@@ -179,6 +186,7 @@ askBtn.addEventListener("click", async () => {
     const reply = await askGPTWorker(text, menuData, "menu");
     responseBox.value = reply;
   } catch (err) {
+    console.error(err);
     responseBox.value = "Error: " + err.message;
   }
 });
@@ -193,6 +201,7 @@ translateBtn.addEventListener("click", async () => {
     const reply = await askGPTWorker(text, [], "translate");
     responseBox.value = reply;
   } catch (err) {
+    console.error(err);
     responseBox.value = "Error: " + err.message;
   }
 });
