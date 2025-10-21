@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Restaurant Assistant - Whisper Auto Stop</title>
+<title>AI Restaurant Assistant - Whisper Safe</title>
 <style>
 body { font-family: Arial, sans-serif; background:#fafafa; padding:20px; text-align:center; }
 h2 { margin-bottom:6px; }
@@ -18,8 +18,8 @@ button:disabled { background:#999; cursor:not-allowed; }
 </style>
 </head>
 <body>
-<h2>🍽️ AI Bosphorus Lounge Restaurant Assistant</h2>
-<p class="sub">Speak or type in any language — Auto stop on silence</p>
+<h2>🍽️ AI Restaurant Assistant</h2>
+<p class="sub">Speak or type in any language — Auto stop on silence, safe JSON</p>
 
 <div class="button-container">
   <button id="micBtn">🎤 Speak</button>
@@ -83,9 +83,9 @@ micBtn.addEventListener('click', async () => {
     const checkSilence = () => {
       analyser.getByteFrequencyData(dataArray);
       const avg = dataArray.reduce((a,b)=>a+b,0)/dataArray.length;
-      if(avg < 5){ // sessizlik eşiği, gürültüye göre değiştirilebilir
+      if(avg < 5){ 
         if(!silenceStart) silenceStart = Date.now();
-        else if(Date.now() - silenceStart > 800){ // 0.8 saniye sessizlik → stop
+        else if(Date.now() - silenceStart > 800){
           mediaRecorder.stop();
           audioContext.close();
           return;
@@ -110,7 +110,20 @@ micBtn.addEventListener('click', async () => {
           method:'POST',
           body: formData
         });
-        const data = await res.json();
+
+        const rawText = await res.text();
+        let data;
+        try{
+          data = JSON.parse(rawText);
+        }catch(e){
+          console.error('JSON parse error:', e);
+          alert('Worker JSON döndürmedi: '+rawText);
+          micBtn.disabled = false;
+          micBtn.textContent = '🎤 Speak';
+          debugEl.textContent = 'JSON parse error';
+          return;
+        }
+
         if(data && data.text){
           userInput.value = data.text;
           debugEl.textContent = 'Transcription complete';
@@ -118,10 +131,12 @@ micBtn.addEventListener('click', async () => {
           debugEl.textContent = 'No transcription returned';
           alert('Speech recognition failed.');
         }
+
       }catch(err){
         console.error(err);
         alert('Error sending audio: '+(err.message||err));
       }
+
       micBtn.disabled = false;
       micBtn.textContent = '🎤 Speak';
     };
@@ -206,4 +221,3 @@ translateBtn.addEventListener('click', async ()=>{
 </script>
 </body>
 </html>
-
