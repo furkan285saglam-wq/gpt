@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Restaurant Assistant - Push-to-Talk</title>
+<title>AI Restaurant Assistant - Whisper Auto Stop</title>
 <style>
 body { font-family: Arial, sans-serif; background:#fafafa; padding:20px; text-align:center; }
 h2 { margin-bottom:6px; }
@@ -19,7 +19,7 @@ button:disabled { background:#999; cursor:not-allowed; }
 </head>
 <body>
 <h2>🍽️ AI Restaurant Assistant</h2>
-<p class="sub">Press & hold 🎤 to speak — release to send</p>
+<p class="sub">Speak or type in any language — Auto stop on silence</p>
 
 <div class="button-container">
   <button id="micBtn">🎤 Speak</button>
@@ -43,75 +43,95 @@ const userInput = document.getElementById('userInput');
 const responseBox = document.getElementById('response');
 const debugEl = document.getElementById('debug');
 
-let mediaRecorder, audioChunks, stream;
+const ua = navigator.userAgent || '';
+const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
 
-/* ---------- Push-to-talk functions ---------- */
-const startRecording = async () => {
+if(isIOS && isSafari){
   micBtn.disabled = true;
-  micBtn.textContent = '🎙️ Recording...';
-  debugEl.textContent = 'Recording...';
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
+  micBtn.textContent = '🎤 Not supported on iPhone Safari';
+  debugEl.textContent = 'iPhone Safari blocks web SpeechRecognition. Use Android/PC.';
+}
+
+/* ---------- Record audio with auto stop on silence ---------- */
+micBtn.addEventListener('click', async () => {
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    alert('Tarayıcı mikrofon erişimini desteklemiyor.');
+    return;
+  }
+
+  micBtn.disabled = true;
+  micBtn.textContent = '🎙️ Listening...';
+  debugEl.textContent = 'Listening...';
+
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    const audioChunks = [];
+    const mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.ondataavailable = e => { if(e.data.size>0) audioChunks.push(e.data); };
     mediaRecorder.start();
-  } catch(err){
+
+    /* ---------- Silence Detection ---------- */
+    const audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    let silenceStart = null;
+    const checkSilence = () => {
+      analyser.getByteFrequencyData(dataArray);
+      const avg = dataArray.reduce((a,b)=>a+b,0)/dataArray.length;
+      if(avg < 5){ // sessizlik eşiği, gürültüye göre değiştirilebilir
+        if(!silenceStart) silenceStart = Date.now();
+        else if(Date.now() - silenceStart > 800){ // 0.8 saniye sessizlik → stop
+          mediaRecorder.stop();
+          audioContext.close();
+          return;
+        }
+      }else{
+        silenceStart = null;
+      }
+      requestAnimationFrame(checkSilence);
+    };
+    checkSilence();
+
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(track=>track.stop());
+      const audioBlob = new Blob(audioChunks,{ type:'audio/webm' });
+
+      debugEl.textContent = 'Sending audio to server...';
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'recording.webm');
+
+      try{
+        const res = await fetch('https://mandarinopenai.furkan285saglam.workers.dev/',{
+          method:'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if(data && data.text){
+          userInput.value = data.text;
+          debugEl.textContent = 'Transcription complete';
+        }else{
+          debugEl.textContent = 'No transcription returned';
+          alert('Speech recognition failed.');
+        }
+      }catch(err){
+        console.error(err);
+        alert('Error sending audio: '+(err.message||err));
+      }
+      micBtn.disabled = false;
+      micBtn.textContent = '🎤 Speak';
+    };
+
+  }catch(err){
     console.error(err);
     alert('Error accessing microphone: '+(err.message||err));
     micBtn.disabled = false;
     micBtn.textContent = '🎤 Speak';
   }
-};
-
-const stopRecording = async () => {
-  return new Promise(resolve => {
-    if(!mediaRecorder) return resolve(null);
-    mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type:'audio/webm' });
-      if(stream) stream.getTracks().forEach(track => track.stop());
-      resolve(audioBlob);
-    };
-    mediaRecorder.stop();
-    micBtn.disabled = false;
-    micBtn.textContent = '🎤 Speak';
-  });
-};
-
-const sendAudioToServer = async (blob) => {
-  if(!blob) return;
-  debugEl.textContent = 'Sending audio to server...';
-  const formData = new FormData();
-  formData.append('file', blob, 'recording.webm');
-  try{
-    const res = await fetch('https://mandarinopenai.furkan285saglam.workers.dev/', {
-      method:'POST',
-      body: formData
-    });
-    const data = await res.json();
-    if(data && data.text){
-      userInput.value = data.text;
-      debugEl.textContent = 'Transcription complete';
-    }else{
-      debugEl.textContent = 'No transcription returned';
-      alert('Speech recognition failed.');
-    }
-  }catch(err){
-    console.error(err);
-    alert('Error sending audio: '+(err.message||err));
-  }
-};
-
-/* ---------- Push-to-talk events ---------- */
-micBtn.addEventListener('mousedown', startRecording);
-micBtn.addEventListener('touchstart', startRecording);
-micBtn.addEventListener('mouseup', async () => {
-  const blob = await stopRecording();
-  await sendAudioToServer(blob);
-});
-micBtn.addEventListener('touchend', async () => {
-  const blob = await stopRecording();
-  await sendAudioToServer(blob);
 });
 
 /* ---------- GPT Worker ---------- */
