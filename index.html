@@ -90,18 +90,33 @@ const translateBtn = document.getElementById("translateBtn");
 const userInput = document.getElementById("userInput");
 const responseBox = document.getElementById("response");
 
-// 🎤 Ses tanıma (otomatik dil)
+// 🎤 Ses tanıma (çok dilli + otomatik kapanan)
 let recognition;
 if ("webkitSpeechRecognition" in window) {
   recognition = new webkitSpeechRecognition();
+
   recognition.continuous = false;
   recognition.interimResults = false;
 
-  // Tarayıcı dilini otomatik algıla
-  recognition.lang = navigator.language || "en-US";
+  // 🌍 Dili otomatik belirle
+  const userLang = navigator.language || "en-US";
+  recognition.lang =
+    userLang.startsWith("tr") ? "tr-TR" :
+    userLang.startsWith("fr") ? "fr-FR" :
+    userLang.startsWith("ar") ? "ar-SA" :
+    userLang.startsWith("ja") ? "ja-JP" :
+    userLang.startsWith("zh-CN") ? "zh-CN" :
+    userLang.startsWith("zh-TW") ? "zh-TW" :
+    "en-US";
+
+  recognition.onstart = () => {
+    micBtn.textContent = "🎙️ Listening...";
+    micBtn.disabled = true;
+  };
 
   recognition.onresult = (event) => {
     userInput.value = event.results[0][0].transcript;
+    recognition.stop(); // konuşma bitince durdur
   };
 
   recognition.onerror = (event) => {
@@ -109,13 +124,17 @@ if ("webkitSpeechRecognition" in window) {
     if (event.error === "no-speech" || event.error === "audio-capture") {
       alert("Lütfen mikrofonu kontrol edin ve tekrar deneyin.");
     } else if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-      alert("Mikrofona izin verilmedi veya tarayıcı engelledi. Lütfen siteye mikrofon izni verin.");
+      alert("Mikrofona izin verilmedi veya tarayıcı engelledi. Lütfen izinleri kontrol edin.");
     } else {
       alert("Voice recognition error: " + event.error);
     }
+    micBtn.textContent = "🎤 Speak";
+    micBtn.disabled = false;
   };
 
   recognition.onend = () => {
+    micBtn.textContent = "🎤 Speak";
+    micBtn.disabled = false;
     console.log("Voice recognition ended.");
   };
 } else {
@@ -126,11 +145,10 @@ if ("webkitSpeechRecognition" in window) {
 micBtn.addEventListener("click", async () => {
   if (!recognition) return;
   try {
-    // Mikrofon iznini önceden tetikle
     await navigator.mediaDevices.getUserMedia({ audio: true });
     recognition.start();
   } catch (err) {
-    console.error("Could not access microphone:", err);
+    console.error("Microphone access error:", err);
     alert("Mikrofona erişim sağlanamadı. Lütfen izin verdiğinizden emin olun.");
   }
 });
