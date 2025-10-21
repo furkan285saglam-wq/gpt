@@ -1,163 +1,170 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>AI Restaurant Assistant</title>
 <style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #fafafa;
-    text-align: center;
-    padding: 20px;
-  }
-
-  h2 {
-    margin-bottom: 10px;
-  }
-
-  textarea {
-    width: 90%;
-    max-width: 600px;
-    height: 100px;
-    font-size: 16px;
-    margin-top: 10px;
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-    resize: vertical;
-  }
-
-  .button-container {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-    margin: 10px 0;
-  }
-
-  button {
-    background-color: #0078d7;
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 16px;
-    cursor: pointer;
-    flex: 1 1 150px;
-    max-width: 200px;
-    transition: background 0.2s ease;
-  }
-
-  button:hover {
-    background-color: #005fa3;
-  }
-
-  button:disabled {
-    background-color: #999;
-    cursor: not-allowed;
-  }
-
-  @media (max-width: 500px) {
-    button {
-      flex: 1 1 100%;
-      max-width: none;
-    }
-  }
+  body { font-family: Arial, sans-serif; background:#fafafa; padding:20px; text-align:center; }
+  h2 { margin-bottom:6px; }
+  p.sub { margin-top:0; color:#555; }
+  textarea { width:90%; max-width:600px; height:100px; font-size:16px; margin:10px auto; padding:10px; border-radius:8px; border:1px solid #ccc; resize:vertical; display:block; }
+  .button-container { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin:10px 0; }
+  button { background:#0078d7; color:#fff; border:none; padding:12px 20px; border-radius:8px; font-size:16px; cursor:pointer; flex:1 1 150px; max-width:200px; transition:background .15s; }
+  button:hover { background:#005fa3; }
+  button:disabled { background:#999; cursor:not-allowed; }
+  @media (max-width:500px) { button { flex:1 1 100%; max-width:none; } textarea { height:120px; } }
+  .small { font-size:13px; color:#666; margin-top:6px; }
 </style>
 </head>
 <body>
-<h2>🍽️ AI Restaurant Assistant</h2>
-<p>Speak or type in any language</p>
+  <h2>🍽️ AI Restaurant Assistant</h2>
+  <p class="sub">Speak or type in any language — mobile tested (with fallbacks)</p>
 
-<div class="button-container">
-  <button id="micBtn">🎤 Speak</button>
-</div>
+  <div class="button-container">
+    <button id="micBtn">🎤 Speak</button>
+  </div>
 
-<textarea id="userInput" placeholder="Ask or say something..."></textarea>
+  <textarea id="userInput" placeholder="Ask or say something..."></textarea>
 
-<div class="button-container">
-  <button id="askBtn">Ask</button>
-  <button id="translateBtn">Translate</button>
-</div>
+  <div class="button-container">
+    <button id="askBtn">Ask</button>
+    <button id="translateBtn">Translate</button>
+  </div>
 
-<textarea id="response" placeholder="Assistant reply..." readonly></textarea>
+  <textarea id="response" placeholder="Assistant reply..." readonly></textarea>
+  <p class="small" id="debug"></p>
 
 <script>
-const micBtn = document.getElementById("micBtn");
-const askBtn = document.getElementById("askBtn");
-const translateBtn = document.getElementById("translateBtn");
-const userInput = document.getElementById("userInput");
-const responseBox = document.getElementById("response");
+/* ---------- Elements ---------- */
+const micBtn = document.getElementById('micBtn');
+const askBtn = document.getElementById('askBtn');
+const translateBtn = document.getElementById('translateBtn');
+const userInput = document.getElementById('userInput');
+const responseBox = document.getElementById('response');
+const debugEl = document.getElementById('debug');
 
-// 🎤 Ses tanıma (çok dilli + otomatik kapanan)
-let recognition;
-if ("webkitSpeechRecognition" in window) {
+/* ---------- Environment detection ---------- */
+const ua = navigator.userAgent || '';
+const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+if (isIOS && isSafari) {
+  // iOS Safari has very limited/blocked SpeechRecognition support; inform user and disable mic button.
+  micBtn.disabled = true;
+  micBtn.textContent = '🎤 Not supported on iPhone Safari';
+  debugEl.textContent = 'Note: iPhone Safari often blocks SpeechRecognition. Use Android Chrome or desktop Chrome.';
+}
+
+/* ---------- SpeechRecognition setup (multi-language) ---------- */
+let recognition = null;
+if (!micBtn.disabled && 'webkitSpeechRecognition' in window) {
   recognition = new webkitSpeechRecognition();
-
   recognition.continuous = false;
   recognition.interimResults = false;
 
-  // 🌍 Dili otomatik belirle
-  const userLang = navigator.language || "en-US";
+  // Map navigator.language to an appropriate locale for recognition
+  const userLang = (navigator.language || 'en-US').toLowerCase();
   recognition.lang =
-    userLang.startsWith("tr") ? "tr-TR" :
-    userLang.startsWith("fr") ? "fr-FR" :
-    userLang.startsWith("ar") ? "ar-SA" :
-    userLang.startsWith("ja") ? "ja-JP" :
-    userLang.startsWith("zh-CN") ? "zh-CN" :
-    userLang.startsWith("zh-TW") ? "zh-TW" :
-    "en-US";
+    userLang.startsWith('tr') ? 'tr-TR' :
+    userLang.startsWith('fr') ? 'fr-FR' :
+    userLang.startsWith('ar') ? 'ar-SA' :
+    userLang.startsWith('ja') ? 'ja-JP' :
+    userLang.startsWith('zh-tw') ? 'zh-TW' :
+    userLang.startsWith('zh-hk') ? 'zh-TW' :
+    userLang.startsWith('zh') ? 'zh-CN' :
+    'en-US';
 
+  // UI state on start
   recognition.onstart = () => {
-    micBtn.textContent = "🎙️ Listening...";
+    micBtn.textContent = '🎙️ Listening...';
     micBtn.disabled = true;
+    debugEl.textContent = `Listening (${recognition.lang})`;
   };
 
   recognition.onresult = (event) => {
-    userInput.value = event.results[0][0].transcript;
-    recognition.stop(); // konuşma bitince durdur
+    try {
+      const transcript = event.results[0][0].transcript || '';
+      userInput.value = transcript;
+    } catch (e) {
+      console.error('onresult parse error', e);
+    }
+    // ensure we stop recognition cleanly
+    try { recognition.stop(); } catch(e) { /* ignore */ }
   };
 
   recognition.onerror = (event) => {
-    console.error("Speech recognition error:", event.error);
-    if (event.error === "no-speech" || event.error === "audio-capture") {
-      alert("Lütfen mikrofonu kontrol edin ve tekrar deneyin.");
-    } else if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-      alert("Mikrofona izin verilmedi veya tarayıcı engelledi. Lütfen izinleri kontrol edin.");
+    console.error('Speech recognition error:', event.error);
+    if (event.error === 'no-speech' || event.error === 'audio-capture') {
+      alert('Lütfen mikrofonu kontrol edin ve tekrar deneyin.');
+    } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      alert('Mikrofona izin verilmedi veya tarayıcı engelledi. Lütfen izinleri kontrol edin.');
     } else {
-      alert("Voice recognition error: " + event.error);
+      alert('Voice recognition error: ' + event.error);
     }
-    micBtn.textContent = "🎤 Speak";
+    micBtn.textContent = '🎤 Speak';
     micBtn.disabled = false;
+    debugEl.textContent = `Error: ${event.error}`;
   };
 
   recognition.onend = () => {
-    micBtn.textContent = "🎤 Speak";
+    micBtn.textContent = '🎤 Speak';
     micBtn.disabled = false;
-    console.log("Voice recognition ended.");
+    debugEl.textContent = 'Idle';
+    console.log('Speech recognition ended');
   };
 } else {
-  micBtn.disabled = true;
-  micBtn.textContent = "🎤 Not supported";
+  // Either speech API not present or intentionally disabled (e.g. iOS Safari)
+  if (!micBtn.disabled) {
+    micBtn.disabled = true;
+    micBtn.textContent = '🎤 Not supported';
+    debugEl.textContent = 'SpeechRecognition not available in this browser.';
+  }
 }
 
-micBtn.addEventListener("click", async () => {
+/* ---------- Improved micBtn click: getUserMedia test + delay before start (race fix) ---------- */
+micBtn.addEventListener('click', async () => {
   if (!recognition) return;
+
+  // First, explicit check for getUserMedia support
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('Tarayıcı mikrofon erişimini desteklemiyor.');
+    return;
+  }
+
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true });
-    recognition.start();
+    debugEl.textContent = 'Requesting microphone permission...';
+    // ask for permission and immediately stop tracks to free mic
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    debugEl.textContent = 'Microphone permission granted (test).';
+    // stop all tracks to release the device
+    stream.getTracks().forEach(t => {
+      try { t.stop(); } catch(e) { console.warn(e); }
+    });
+
+    // small delay to avoid race conditions on some mobile browsers (esp Safari)
+    setTimeout(() => {
+      try {
+        recognition.start();
+      } catch (err) {
+        console.error('recognition.start failed:', err);
+        alert('Tarayıcı ses tanımayı engelledi. Lütfen Safari/Chrome ayarlarından siteye mikrofon izni verin.');
+        debugEl.textContent = 'recognition.start failed: ' + (err && err.name ? err.name : err);
+      }
+    }, 500);
   } catch (err) {
-    console.error("Microphone access error:", err);
-    alert("Mikrofona erişim sağlanamadı. Lütfen izin verdiğinizden emin olun.");
+    console.error('Microphone access error (getUserMedia):', err);
+    // show more detailed info to help debugging
+    const name = err && err.name ? err.name : 'UnknownError';
+    const msg = err && err.message ? err.message : '';
+    alert('Mikrofona erişim sağlanamadı. Lütfen izin verdiğinizden emin olun. (' + name + ')');
+    debugEl.textContent = `getUserMedia error: ${name} ${msg}`;
   }
 });
 
-// 🧠 GPT Worker Fonksiyonu
-async function askGPTWorker(prompt, menuData, mode="menu") {
-  let fullPrompt = "";
-
-  if (mode === "menu") {
+/* ---------- GPT Worker (same endpoint as you used) ---------- */
+async function askGPTWorker(prompt, menuData, mode = 'menu') {
+  let fullPrompt = '';
+  if (mode === 'menu') {
     fullPrompt = `
 You are a multilingual restaurant assistant.
 You understand any language and respond in the same language as the customer.
@@ -167,7 +174,7 @@ ${JSON.stringify(menuData, null, 2)}
 Customer says: "${prompt}"
 Reply kindly, and give 1–2 suitable suggestions from the menu.
 `;
-  } else if (mode === "translate") {
+  } else if (mode === 'translate') {
     fullPrompt = `
 You are a translator.
 Translate the following text into English (or target language if specified):
@@ -176,51 +183,53 @@ Only output the translated text.
 `;
   }
 
-  const res = await fetch("https://mandarinopenai.furkan285saglam.workers.dev/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: mode === "menu" ? "You are a helpful restaurant assistant." : "You are a translator." },
-        { role: "user", content: fullPrompt }
-      ]
-    })
-  });
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content?.trim() || "No response.";
+  try {
+    const res = await fetch('https://mandarinopenai.furkan285saglam.workers.dev/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: mode === 'menu' ? 'You are a helpful restaurant assistant.' : 'You are a translator.' },
+          { role: 'user', content: fullPrompt }
+        ]
+      })
+    });
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || 'No response.';
+  } catch (e) {
+    console.error('askGPTWorker error', e);
+    return 'Error contacting GPT worker: ' + (e.message || e);
+  }
 }
 
-// 🧾 Ask butonu
-askBtn.addEventListener("click", async () => {
+/* ---------- Ask button ---------- */
+askBtn.addEventListener('click', async () => {
   const text = userInput.value.trim();
   if (!text) return;
-  responseBox.value = "Thinking...";
-
+  responseBox.value = 'Thinking...';
   try {
-    const menuRes = await fetch("menu.json");
+    const menuRes = await fetch('menu.json');
     const menuData = await menuRes.json();
-    const reply = await askGPTWorker(text, menuData, "menu");
+    const reply = await askGPTWorker(text, menuData, 'menu');
     responseBox.value = reply;
   } catch (err) {
     console.error(err);
-    responseBox.value = "Error: " + err.message;
+    responseBox.value = 'Error: ' + (err.message || err);
   }
 });
 
-// 🧾 Translate butonu
-translateBtn.addEventListener("click", async () => {
+/* ---------- Translate button ---------- */
+translateBtn.addEventListener('click', async () => {
   const text = userInput.value.trim();
   if (!text) return;
-  responseBox.value = "Translating...";
-
+  responseBox.value = 'Translating...';
   try {
-    const reply = await askGPTWorker(text, [], "translate");
+    const reply = await askGPTWorker(text, [], 'translate');
     responseBox.value = reply;
   } catch (err) {
     console.error(err);
-    responseBox.value = "Error: " + err.message;
+    responseBox.value = 'Error: ' + (err.message || err);
   }
 });
 </script>
