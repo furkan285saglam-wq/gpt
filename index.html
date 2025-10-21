@@ -47,11 +47,6 @@ const ua = navigator.userAgent || '';
 const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
 const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
 
-if(isIOS && isSafari){
-  micBtn.disabled = true;
-  micBtn.textContent = '🎤 Not supported on iPhone Safari';
-  debugEl.textContent = 'iPhone Safari blocks web SpeechRecognition. Use Android/PC.';
-}
 
 /* ---------- Record audio with auto stop on silence ---------- */
 micBtn.addEventListener('click', async () => {
@@ -221,3 +216,4 @@ translateBtn.addEventListener('click', async ()=>{
 </script>
 </body>
 </html>
+
